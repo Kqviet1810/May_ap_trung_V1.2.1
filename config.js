@@ -17,3 +17,12 @@ window.MAYAP_WEB_CONFIG = Object.freeze({
   commandTimeoutMs: 10000,
   configTimeoutMs: 15000
 });
+
+// Module Cloud tự vô hiệu khi chạy GitHub Pages hoặc khi Cloudflare chưa bind D1.
+// Vì vậy bản web hiện tại vẫn chạy bình thường trong lúc triển khai từng bước.
+(() => {
+  const script = document.createElement('script');
+  script.src = './mayap-cloud.js';
+  script.defer = true;
+  document.head.appendChild(script);
+})();

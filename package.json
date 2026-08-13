@@ -1,0 +1,12 @@
+{
+  "name": "mayap-cloud",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MAYAP PWA + Cloudflare Pages Functions backend",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
