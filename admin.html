@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#103a33" />
+<title>MAYAP Admin</title>
+<link rel="icon" href="./icons/icon-192.png" />
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#16332f;background:#eef6f4}body{margin:0}.wrap{max-width:760px;margin:auto;padding:24px}.card{background:white;border:1px solid #d8e7e3;border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 10px 30px #0a3a3020}h1,h2{margin:.2em 0}p{color:#5b716d}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{display:grid;gap:6px;font-weight:650}input{padding:12px;border:1px solid #b9ccc7;border-radius:10px;font:inherit}button{padding:12px 16px;border:0;border-radius:10px;background:#07594f;color:white;font-weight:750;cursor:pointer}button.secondary{background:#e7f1ef;color:#07594f}.row{display:flex;gap:10px;align-items:center;justify-content:space-between}.status{white-space:pre-wrap;background:#f6faf9;padding:12px;border-radius:10px;font-family:ui-monospace,monospace;font-size:13px}.hidden{display:none}@media(max-width:640px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main class="wrap">
+<h1>MAYAP Admin</h1><p>Khởi tạo hệ thống, tạo khách hàng và gán máy. Trang này chỉ hoạt động trên Cloudflare Pages.</p>
+<section class="card hidden" id="bootstrapCard"><h2>Khởi tạo lần đầu</h2><div class="grid">
+<label>Bootstrap token<input id="bootstrapToken" type="password" autocomplete="off"></label>
+<label>Tên Admin<input id="bootstrapName" value="MAYAP Admin"></label>
+<label>Email Admin<input id="bootstrapEmail" type="email"></label>
+<label>Mật khẩu Admin<input id="bootstrapPassword" type="password" minlength="10"></label>
+</div><p><button id="bootstrapBtn">Khởi tạo hệ thống</button></p></section>
+<section class="card hidden" id="loginCard"><h2>Đăng nhập Admin</h2><div class="grid"><label>Email<input id="loginEmail" type="email"></label><label>Mật khẩu<input id="loginPassword" type="password"></label></div><p><button id="loginBtn">Đăng nhập</button></p></section>
+<section class="card hidden" id="provisionCard"><div class="row"><div><h2>Tạo khách + gán máy</h2><p id="adminName"></p></div><button class="secondary" id="logoutBtn">Đăng xuất</button></div>
+<div class="grid"><label>Email khách<input id="customerEmail" type="email"></label><label>Tên khách<input id="customerName"></label><label>Mật khẩu ban đầu<input id="customerPassword" type="password" minlength="10"></label><label>Device ID<input id="deviceId" placeholder="MAP-A1B2C3D4E5F6"></label><label>Tên máy<input id="deviceName" placeholder="Máy ấp số 1"></label></div><p><button id="provisionBtn">Tạo / gán thiết bị</button></p>
+<div class="status" id="result">Chưa có thao tác.</div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);const show=(id,v=true)=>$(id).classList.toggle('hidden',!v);async function api(url,opt={}){const r=await fetch(url,{credentials:'same-origin',headers:{'content-type':'application/json',...(opt.headers||{})},...opt});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
+async function refresh(){try{const h=await api('./api/health');if(h.setupRequired){show('bootstrapCard');show('loginCard',false);show('provisionCard',false);return}show('bootstrapCard',false);try{const me=await api('./api/auth/me');if(me.user.role!=='admin')throw new Error('Tài khoản không phải Admin');$('adminName').textContent=me.user.name+' · '+me.user.email;show('provisionCard');show('loginCard',false)}catch{show('loginCard');show('provisionCard',false)}}catch(e){$('result')&&($('result').textContent='Cloudflare chưa cấu hình: '+e.message)}}
+$('bootstrapBtn').onclick=async()=>{try{await api('./api/admin/bootstrap',{method:'POST',body:JSON.stringify({bootstrapToken:$('bootstrapToken').value,name:$('bootstrapName').value,email:$('bootstrapEmail').value,password:$('bootstrapPassword').value})});$('loginEmail').value=$('bootstrapEmail').value;$('loginPassword').value=$('bootstrapPassword').value;await api('./api/auth/login',{method:'POST',body:JSON.stringify({email:$('loginEmail').value,password:$('loginPassword').value})});await refresh()}catch(e){alert(e.message)}};
+$('loginBtn').onclick=async()=>{try{await api('./api/auth/login',{method:'POST',body:JSON.stringify({email:$('loginEmail').value,password:$('loginPassword').value})});await refresh()}catch(e){alert(e.message)}};
+$('logoutBtn').onclick=async()=>{await api('./api/auth/logout',{method:'POST',body:'{}'});await refresh()};
+$('provisionBtn').onclick=async()=>{try{const d=await api('./api/admin/provision',{method:'POST',body:JSON.stringify({email:$('customerEmail').value,name:$('customerName').value,password:$('customerPassword').value,deviceId:$('deviceId').value,deviceName:$('deviceName').value})});$('result').textContent=JSON.stringify(d,null,2);if(d.alarmSecret)alert('Hãy lưu alarmSecret ngay để nạp vào ESP32. Secret chỉ hiển thị một lần.')}catch(e){$('result').textContent='Lỗi: '+e.message}};refresh();
+</script></body></html>
