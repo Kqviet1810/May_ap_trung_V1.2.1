@@ -3,16 +3,16 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-// Tích hợp mẫu. Đưa URL + secret sang NVS/partition bảo mật trong firmware thương mại.
+// Tích hợp mẫu production-friendly: URL, device secret và CA certificate phải nằm ngoài source public.
 class MayapCloudAlarm {
 public:
-  MayapCloudAlarm(const String& endpoint, const String& deviceId, const String& alarmSecret)
-    : _endpoint(endpoint), _deviceId(deviceId), _alarmSecret(alarmSecret) {}
+  MayapCloudAlarm(const String& endpoint, const String& deviceId, const String& alarmSecret, const char* rootCa)
+    : _endpoint(endpoint), _deviceId(deviceId), _alarmSecret(alarmSecret), _rootCa(rootCa) {}
 
   bool send(int code, float value, float temperature, float humidity, const String& message = "") {
-    if (WiFi.status() != WL_CONNECTED) return false;
+    if (WiFi.status() != WL_CONNECTED || !_rootCa || !_rootCa[0]) return false;
     WiFiClientSecure client;
-    client.setInsecure(); // CHỈ để bring-up. Production: cấu hình CA certificate/pinning phù hợp.
+    client.setCACert(_rootCa);
     HTTPClient https;
     if (!https.begin(client, _endpoint)) return false;
     https.addHeader("Content-Type", "application/json");
@@ -31,6 +31,7 @@ private:
   String _endpoint;
   String _deviceId;
   String _alarmSecret;
+  const char* _rootCa;
 
   static String escape(const String& input) {
     String out;
@@ -51,11 +52,13 @@ Ví dụ:
 MayapCloudAlarm cloudAlarm(
   "https://mayap.pages.dev/api/alarm",
   "MAP-A1B2C3D4E5F6",
-  "mayap_<secret-duoc-admin-cap>"
+  "mayap_<secret-duoc-admin-cap>",
+  MAYAP_CLOUD_ROOT_CA
 );
 
 Khi firmware phát sinh alarm quan trọng:
 cloudAlarm.send(41, 1, temperature, humidity, "Mất tín hiệu cảm biến");
 
 Giữ MQTT hiện tại song song. HTTPS này chỉ dùng cho alarm cần Push khi PWA đã đóng.
+Không dùng client.setInsecure() trong firmware thương mại.
 */
