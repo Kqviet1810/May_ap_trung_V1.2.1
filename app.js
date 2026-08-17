@@ -135,9 +135,18 @@
     return value === true;
   }
 
+  // Firmware WEB_REQUEST_ID_CAPACITY = 40 byte KE CA null terminator (xem
+  // config.h + mayap_web_adapter.h::readString trong firmware RC2), nen chuoi
+  // request Id toi da dung duoc la 39 ky tu. crypto.randomUUID() co dau gach
+  // ngang dai 36 ky tu; kem tien to "cfg-"/"cmd-" (4 ky tu) la du 40 ky tu va
+  // BI FIRMWARE TU CHOI TOAN BO GOI (readString tra ve false -> "invalid").
+  // Bo dau gach ngang de con 32 ky tu hex, luon nam duoi gioi han an toan.
+  const REQUEST_ID_MAX = 36;
   function requestId(prefix = 'req') {
-    const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    return `${prefix}-${id}`.slice(0, 63);
+    const raw = crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+    return `${prefix}-${raw}`.slice(0, REQUEST_ID_MAX);
   }
 
   function topicBase(deviceId) {
@@ -857,9 +866,34 @@
     if (device.id === state.selectedId) renderDevice();
   }
 
+  // Trang thai mang gui kem trong "value" cua su kien code 90 (NetStateChanged),
+  // doi chieu enum NetState trong config.h.
+  const NET_STATE_TEXT = {
+    0: 'đã tắt (OFFLINE)',
+    1: 'đang bật Wi‑Fi',
+    2: 'chưa có Wi‑Fi',
+    3: 'có Wi‑Fi, chưa lên máy chủ',
+    4: 'đã kết nối máy chủ'
+  };
+
+  // event.code - 1000 = FaultCode, doi chieu bang loi faultDescriptor() trong
+  // config.h. CAP NHAT DONG BO khi firmware them ma loi moi vao FaultCode.
+  const FAULT_TITLES = {
+    101: 'Mất cảm biến', 102: 'Cảm biến sai', 103: 'Cảm biến bất thường',
+    104: 'Cảm biến đứng yên', 110: 'Nhiệt độ thấp', 111: 'Nhiệt độ cao',
+    112: 'Quá nhiệt khẩn cấp', 120: 'Độ ẩm thấp - hết nước',
+    201: 'Lỗi 2 hành trình', 202: 'Đảo quá thời gian', 203: 'Hành trình bị kẹt',
+    204: 'Xung đột lệnh đảo', 301: 'Mất EEPROM', 302: 'EEPROM suy giảm',
+    303: 'Reset bất thường', 304: 'Xung đột output', 305: 'Relay đóng cắt nhiều',
+    306: 'Lỗi đồng hồ RTC', 307: 'Vòng điều khiển chậm', 308: 'Stack sắp cạn',
+    309: 'Thiếu bộ nhớ', 310: 'Lỗi bộ nhớ RAM', 311: 'Lỗi bus I2C',
+    312: 'Hàng đợi lưu đầy', 401: 'Nhiệt tăng khi đã tắt', 402: 'Thanh nhiệt không lên'
+  };
+
   function eventText(event) {
     const code = Number(event.code || 0);
     const value = Number(event.value || 0);
+    const type = Number(event.type || 0);
     const known = {
       1: 'Máy vừa được cấp nguồn',
       2: 'Máy vừa khởi động lại từ bên ngoài',
@@ -890,7 +924,15 @@
       80: 'Một lệnh điều khiển đã bị từ chối'
     };
     if (known[code]) return known[code];
-    if (code >= 1000) return `Cảnh báo hệ thống #${code - 1000}`;
+    if (code === 90) return `Trạng thái mạng: ${NET_STATE_TEXT[value] ?? `mã ${value}`}`;
+    if (code === 91) return 'Đã mở cổng cấu hình Wi‑Fi (giữ nút BOOT)';
+    if (code === 92) return 'Mở cổng cấu hình Wi‑Fi thất bại';
+    if (code >= 1000) {
+      const title = FAULT_TITLES[code - 1000] || `mã ${code - 1000}`;
+      if (type === 5) return `Đã hết lỗi: ${title}`;
+      if (type === 6) return `Đã xác nhận lỗi: ${title}`;
+      return `Phát sinh lỗi: ${title}`;
+    }
     if (code >= 200) return `Đầu ra #${code - 200} ${value ? 'đã bật' : 'đã tắt'}`;
     if (code >= 100) return `Tín hiệu vào #${code - 100} ${value ? 'đã tác động' : 'đã nhả'}`;
     return `Sự kiện máy #${code}`;
