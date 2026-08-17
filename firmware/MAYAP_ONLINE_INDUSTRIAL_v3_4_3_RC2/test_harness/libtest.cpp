@@ -207,6 +207,60 @@ int main() {
   mqttConnect();
   pump(40);
 
+  section("9. REQUESTID DAI NHU WEBSITE THAT (UUID)");
+  {
+    // app.js that (requestId()) tao id dang "<prefix>-<32 hex tu
+    // crypto.randomUUID().replace(/-/g,'')" = 36 ky tu, vd:
+    // "cfg-56406166ab4b4243993b157df2acebe8". WEB_REQUEST_ID_CAPACITY = 40
+    // (config.h) nen readString() trong mayap_web_adapter.h chi giu duoc toi
+    // da 39 ky tu; mot chuoi requestId dai hon (vd giu nguyen dau gach ngang
+    // UUID: "cfg-" + uuid 36 ky tu = 40 ky tu) se lam readString() tra ve
+    // false va CA GOI CONFIG/COMMAND BI TU CHOI "invalid". Test nay khoa
+    // dung do dai website that dang phat sinh, tranh tai dien loi cu.
+    const char *cfgReqId = "cfg-56406166ab4b4243993b157df2acebe8";  // 36 ky tu
+    const char *cmdReqId = "cmd-a1b2c3d4e5f64789a0b1c2d3e4f5a6b7";  // 36 ky tu
+    CHECK(strlen(cfgReqId) < 40 && strlen(cmdReqId) < 40,
+          "requestId website that (36 ky tu) nam duoi WEB_REQUEST_ID_CAPACITY");
+
+    uint32_t rev = 1900;
+    char cfgJson[2048];
+    snprintf(cfgJson, sizeof(cfgJson),
+      "{\"v\":1,\"requestId\":\"%s\",\"revision\":%lu,\"config\":{"
+      "\"targetTemp\":37.5,\"tempHysteresis\":0.2,\"lowTempAlarm\":36.5,"
+      "\"highTempAlarm\":38.2,\"emergencyTemp\":39.0,\"kp\":18.0,\"ki\":0.8,\"kd\":45.0,"
+      "\"lowHumidityAlarm\":45.0,\"ventOnTemp\":38.0,\"ventOffTemp\":37.7,"
+      "\"tempOffset\":0.0,\"humidityOffset\":0.0,\"pidCycleSec\":10,"
+      "\"humidityAlarmDelaySec\":60,\"turnIntervalMin\":120,\"turnMaxRunSec\":300,"
+      "\"powerRestoreDelaySec\":30,\"sensorTimeoutSec\":10,\"maxHeaterPower\":100,"
+      "\"totalIncubationDays\":21,\"circulationFanEnabled\":true,\"turningEnabled\":true,"
+      "\"autoResumeAfterPower\":true,\"allowHeatWithoutBatch\":false,\"alarmEnabled\":true,"
+      "\"controlMode\":1,\"nextDirection\":0}}",
+      cfgReqId, (unsigned long)rev);
+    mqttFire(MQTT_EVENT_DATA, cs.c_str(), cfgJson, false);
+    pump(120);
+    const MqttRecord *cfgAck = g_mqtt.last("/ack");
+    CHECK(cfgAck && cfgAck->payload.find("\"applied\"") != std::string::npos,
+          "Config voi requestId dai nhu website that -> applied (khong bi 'invalid')");
+    CHECK(cfgAck && cfgAck->payload.find(cfgReqId) != std::string::npos,
+          "Ack tra dung nguyen requestId website that gui len");
+
+    const unsigned long boot =
+        (unsigned long)jnum(g_mqtt.last("/snapshot")->payload, "bootId");
+    char cmdJson[320];
+    snprintf(cmdJson, sizeof(cmdJson),
+      "{\"v\":1,\"requestId\":\"%s\",\"sequence\":500,"
+      "\"action\":\"alarm_ack\",\"bootId\":%lu,\"expiresAt\":4102444800}",
+      cmdReqId, boot);
+    mqttFire(MQTT_EVENT_DATA, T("/command").c_str(), cmdJson, false);
+    pump(40);
+    const MqttRecord *cmdAck = g_mqtt.last("/ack");
+    CHECK(cmdAck && cmdAck->payload.find("\"invalid\"") == std::string::npos &&
+          cmdAck->payload.find("THIEU") == std::string::npos,
+          "Command voi requestId dai nhu website that duoc nhan dien (khong 'invalid')");
+    CHECK(cmdAck && cmdAck->payload.find(cmdReqId) != std::string::npos,
+          "Ack lenh tra dung nguyen requestId website that gui len");
+  }
+
   section("10. TUONG THICH PHIEN BAN + TU CHOI GOI SAI");
   {
     uint32_t rev = 2000;
